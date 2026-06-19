@@ -92,7 +92,10 @@ def qdf(sql, params=None):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(sql, params or [])
+        if params:
+            cur.execute(sql, params)
+        else:
+            cur.execute(sql)
         rows = cur.fetchall()
         cur.close()
         if not rows:
@@ -110,7 +113,10 @@ def dml(sql, params=None):
     try:
         conn = get_conn()
         cur = conn.cursor()
-        cur.execute(sql, params or [])
+        if params:
+            cur.execute(sql, params)
+        else:
+            cur.execute(sql)
         conn.commit()
         cur.close()
         return True, "OK"
