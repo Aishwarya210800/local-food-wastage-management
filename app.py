@@ -66,20 +66,31 @@ footer    { visibility: hidden; }
 # ─────────────────────────────────────────────
 # DATABASE - MySQL Connection
 # ─────────────────────────────────────────────
-@st.cache_resource
+DB_CFG = dict(
+    host="tramway.proxy.rlwy.net",
+    port=32241,
+    user="root",
+    password="HxOgIDRTrnnBsavCGsxOVawLZNgwrGGH",
+    database="railway",
+    cursorclass=pymysql.cursors.DictCursor,
+    connect_timeout=10,
+    autocommit=False
+)
+
 def get_conn():
-    return pymysql.connect(
-        host="tramway.proxy.rlwy.net",
-        port=32241,
-        user="root",
-        password="HxOgIDRTrnnBsavCGsxOVawLZNgwrGGH",
-        database="railway",
-        cursorclass=pymysql.cursors.DictCursor
-    )
+    """Always returns a live connection — reconnects if dropped."""
+    if "db_conn" not in st.session_state or st.session_state.db_conn is None:
+        st.session_state.db_conn = pymysql.connect(**DB_CFG)
+    else:
+        try:
+            st.session_state.db_conn.ping(reconnect=True)
+        except Exception:
+            st.session_state.db_conn = pymysql.connect(**DB_CFG)
+    return st.session_state.db_conn
 
 def qdf(sql, params=None):
-    conn = get_conn()
     try:
+        conn = get_conn()
         cur = conn.cursor()
         cur.execute(sql, params or [])
         rows = cur.fetchall()
@@ -89,22 +100,25 @@ def qdf(sql, params=None):
         return pd.DataFrame(rows)
     except Exception as e:
         try:
-            conn.rollback()
-        except:
+            get_conn().rollback()
+        except Exception:
             pass
         st.error(f"Query error: {e}")
         return pd.DataFrame()
 
 def dml(sql, params=None):
-    conn = get_conn()
     try:
+        conn = get_conn()
         cur = conn.cursor()
         cur.execute(sql, params or [])
         conn.commit()
         cur.close()
         return True, "OK"
     except Exception as e:
-        conn.rollback()
+        try:
+            get_conn().rollback()
+        except Exception:
+            pass
         return False, str(e)
 
 def scalar(sql, params=None):
@@ -188,7 +202,7 @@ if "Dashboard" in page:
                          color_discrete_map={"Completed":"#2e7d32","Pending":"#ff6f00","Cancelled":"#c62828"})
             fig.update_traces(textinfo="percent+label", hole=0.35)
             fig.update_layout(showlegend=False, margin=dict(t=40,b=10,l=10,r=10), height=280)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with c2:
         df = qdf("SELECT Food_Type, COUNT(*) AS cnt FROM food_listings GROUP BY Food_Type")
@@ -197,7 +211,7 @@ if "Dashboard" in page:
                          color_discrete_sequence=["#388e3c","#ff6f00","#0288d1"])
             fig.update_traces(textinfo="percent+label", hole=0.35)
             fig.update_layout(showlegend=False, margin=dict(t=40,b=10,l=10,r=10), height=280)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with c3:
         df = qdf("""SELECT fl.Meal_Type, COUNT(c.Claim_ID) AS claims
@@ -208,7 +222,7 @@ if "Dashboard" in page:
                          color="claims", color_continuous_scale="Greens", text="claims")
             fig.update_traces(textposition="outside")
             fig.update_layout(showlegend=False, margin=dict(t=40,b=10,l=10,r=10), height=280, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     c4, c5 = st.columns([3,2])
     with c4:
@@ -218,7 +232,7 @@ if "Dashboard" in page:
                          color="qty", color_continuous_scale="YlGn", text="qty")
             fig.update_traces(texttemplate="%{text:,}", textposition="outside")
             fig.update_layout(margin=dict(t=40,b=10), height=300, coloraxis_showscale=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with c5:
         df = qdf("SELECT DATE_FORMAT(Timestamp,'%Y-%m') AS month, COUNT(*) AS claims FROM claims GROUP BY month ORDER BY month")
@@ -226,7 +240,7 @@ if "Dashboard" in page:
             fig = px.line(df, x="month", y="claims", title="📅 Monthly Claim Volume",
                           markers=True, color_discrete_sequence=["#2e7d32"])
             fig.update_layout(margin=dict(t=40,b=10), height=300)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     st.markdown('<div class="sec-head">🏆 Top 5 Providers by Donation</div>', unsafe_allow_html=True)
     df = qdf("""SELECT p.Name, p.Type, p.City,
@@ -398,7 +412,7 @@ GROUP BY r.City ORDER BY Completed_Claims DESC LIMIT 10"""
             fig = px.bar(df.head(15), x=str_cols[0], y=num_cols[0],
                          title=f"Chart — {sel}", color=num_cols[0], color_continuous_scale="Greens")
             fig.update_layout(coloraxis_showscale=False, height=320)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     if run_all:
         st.markdown('<div class="sec-head">📊 Results for All 17 Queries</div>', unsafe_allow_html=True)
@@ -456,14 +470,14 @@ elif "Filter" in page:
             fig = px.bar(df.head(15), x="Food_Name", y="Quantity",
                          color="Food_Type", title="Quantity by Food Name (top 15)",
                          color_discrete_map={"Vegetarian":"#2e7d32","Non-Vegetarian":"#ff6f00","Vegan":"#0288d1"})
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         with c2:
             grp = df.groupby("Meal_Type")["Quantity"].sum().reset_index()
             fig2 = px.pie(grp, values="Quantity", names="Meal_Type",
                           title="Quantity Split by Meal Type",
                           color_discrete_sequence=["#388e3c","#66bb6a","#ff6f00","#0288d1"])
             fig2.update_traces(hole=0.3)
-            st.plotly_chart(fig2, use_container_width=True)
+            st.plotly_chart(fig2, width='stretch')
 
 # ═══════════════════════════════════════════════════════════════
 #  PAGE 4 — CRUD OPERATIONS
@@ -598,33 +612,33 @@ elif "EDA" in page:
         fig = px.pie(df, values="cnt", names="Food_Type", title="Distribution by Food Type",
                      color_discrete_sequence=["#2e7d32","#ff6f00","#0288d1"])
         fig.update_traces(hole=0.3, textinfo="percent+label")
-        c1.plotly_chart(fig, use_container_width=True)
+        c1.plotly_chart(fig, width='stretch')
 
         df2 = qdf("SELECT Meal_Type, COUNT(*) AS cnt FROM food_listings GROUP BY Meal_Type ORDER BY cnt DESC")
         fig2 = px.bar(df2, x="Meal_Type", y="cnt", title="Listings by Meal Type",
                       color="cnt", color_continuous_scale="Greens", text="cnt")
         fig2.update_traces(textposition="outside")
         fig2.update_layout(coloraxis_showscale=False)
-        c2.plotly_chart(fig2, use_container_width=True)
+        c2.plotly_chart(fig2, width='stretch')
 
         df3 = qdf("SELECT Location, COUNT(*) AS cnt FROM food_listings GROUP BY Location ORDER BY cnt DESC LIMIT 15")
         fig3 = px.bar(df3, x="Location", y="cnt", title="Top 15 Cities by Listing Count",
                       color="cnt", color_continuous_scale="YlGn")
         fig3.update_layout(coloraxis_showscale=False, xaxis_tickangle=-35)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
 
         df4 = qdf("SELECT Food_Name, SUM(Quantity) AS qty FROM food_listings GROUP BY Food_Name ORDER BY qty DESC LIMIT 12")
         fig4 = px.bar(df4, x="qty", y="Food_Name", orientation="h",
                       title="Top 12 Foods by Total Quantity",
                       color="qty", color_continuous_scale="Greens")
         fig4.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width='stretch')
 
         df5 = qdf("SELECT Provider_Type, Food_Type, SUM(Quantity) AS qty FROM food_listings GROUP BY Provider_Type, Food_Type")
         fig5 = px.bar(df5, x="Provider_Type", y="qty", color="Food_Type",
                       title="Food Type Breakdown per Provider Category", barmode="stack",
                       color_discrete_map={"Vegetarian":"#2e7d32","Non-Vegetarian":"#ff6f00","Vegan":"#0288d1"})
-        st.plotly_chart(fig5, use_container_width=True)
+        st.plotly_chart(fig5, width='stretch')
 
     with tab_cl:
         c1, c2 = st.columns(2)
@@ -633,7 +647,7 @@ elif "EDA" in page:
                      color="Status",
                      color_discrete_map={"Completed":"#2e7d32","Pending":"#ff6f00","Cancelled":"#c62828"})
         fig.update_traces(hole=0.35, textinfo="percent+label")
-        c1.plotly_chart(fig, use_container_width=True)
+        c1.plotly_chart(fig, width='stretch')
 
         df2 = qdf("""SELECT fl.Meal_Type, COUNT(c.Claim_ID) AS claims
                      FROM food_listings fl JOIN claims c ON fl.Food_ID=c.Food_ID
@@ -642,7 +656,7 @@ elif "EDA" in page:
                       color="claims", color_continuous_scale="Oranges", text="claims")
         fig2.update_traces(textposition="outside")
         fig2.update_layout(coloraxis_showscale=False)
-        c2.plotly_chart(fig2, use_container_width=True)
+        c2.plotly_chart(fig2, width='stretch')
 
         df3 = qdf("""SELECT DATE_FORMAT(Timestamp,'%Y-%m') AS month,
                      COUNT(CASE WHEN Status='Completed' THEN 1 END) AS Completed,
@@ -654,14 +668,14 @@ elif "EDA" in page:
             for col, color in [("Completed","#2e7d32"),("Pending","#ff6f00"),("Cancelled","#c62828")]:
                 fig3.add_trace(go.Bar(x=df3["month"], y=df3[col], name=col, marker_color=color))
             fig3.update_layout(barmode="stack", title="Monthly Claim Trend (Stacked)")
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width='stretch')
 
         df4 = qdf("""SELECT fl.Food_Type, COUNT(c.Claim_ID) AS claims
                      FROM food_listings fl JOIN claims c ON fl.Food_ID=c.Food_ID GROUP BY fl.Food_Type""")
         fig4 = px.pie(df4, values="claims", names="Food_Type", title="Claims by Food Type",
                       color_discrete_map={"Vegetarian":"#2e7d32","Non-Vegetarian":"#ff6f00","Vegan":"#0288d1"})
         fig4.update_traces(hole=0.3)
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width='stretch')
 
     with tab_pr:
         c1, c2 = st.columns(2)
@@ -669,13 +683,13 @@ elif "EDA" in page:
         fig = px.pie(df, values="cnt", names="Type", title="Providers by Type",
                      color_discrete_sequence=px.colors.sequential.Greens_r[:4])
         fig.update_traces(hole=0.3, textinfo="percent+label")
-        c1.plotly_chart(fig, use_container_width=True)
+        c1.plotly_chart(fig, width='stretch')
 
         df2 = qdf("SELECT City, COUNT(*) AS cnt FROM providers GROUP BY City ORDER BY cnt DESC LIMIT 15")
         fig2 = px.bar(df2, x="City", y="cnt", title="Top 15 Cities by Provider Count",
                       color="cnt", color_continuous_scale="Greens")
         fig2.update_layout(coloraxis_showscale=False, xaxis_tickangle=-35)
-        c2.plotly_chart(fig2, use_container_width=True)
+        c2.plotly_chart(fig2, width='stretch')
 
         df3 = qdf("""SELECT p.Name, p.City, SUM(fl.Quantity) AS Total_Donated
                      FROM providers p JOIN food_listings fl ON p.Provider_ID=fl.Provider_ID
@@ -684,7 +698,7 @@ elif "EDA" in page:
                       title="Top 10 Providers by Total Quantity Donated",
                       color="Total_Donated", color_continuous_scale="Greens")
         fig3.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
 
     with tab_re:
         c1, c2 = st.columns(2)
@@ -692,13 +706,13 @@ elif "EDA" in page:
         fig = px.pie(df, values="cnt", names="Type", title="Receivers by Type",
                      color_discrete_sequence=["#1565c0","#0288d1","#4fc3f7","#b3e5fc"])
         fig.update_traces(hole=0.3, textinfo="percent+label")
-        c1.plotly_chart(fig, use_container_width=True)
+        c1.plotly_chart(fig, width='stretch')
 
         df2 = qdf("SELECT City, COUNT(*) AS cnt FROM receivers GROUP BY City ORDER BY cnt DESC LIMIT 15")
         fig2 = px.bar(df2, x="City", y="cnt", title="Top 15 Cities by Receiver Count",
                       color="cnt", color_continuous_scale="Blues")
         fig2.update_layout(coloraxis_showscale=False, xaxis_tickangle=-35)
-        c2.plotly_chart(fig2, use_container_width=True)
+        c2.plotly_chart(fig2, width='stretch')
 
         df3 = qdf("""SELECT r.Name, r.Type, r.City, COUNT(c.Claim_ID) AS Total_Claims
                      FROM receivers r JOIN claims c ON r.Receiver_ID=c.Receiver_ID
@@ -708,7 +722,7 @@ elif "EDA" in page:
                       title="Top 10 Receivers by Total Claims",
                       color="Total_Claims", color_continuous_scale="Blues")
         fig3.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width='stretch')
 
 # ═══════════════════════════════════════════════════════════════
 #  PAGE 6 — PROVIDER / RECEIVER INFO
@@ -740,7 +754,7 @@ elif "Provider" in page:
                          x="Type", y="count", title="Type Breakdown",
                          color="count", color_continuous_scale="Greens")
             fig.update_layout(coloraxis_showscale=False, height=280)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
     with tab_r:
         st.subheader("Search Food Receivers / NGOs")
@@ -765,4 +779,4 @@ elif "Provider" in page:
                          x="Type", y="count", title="Type Breakdown",
                          color="count", color_continuous_scale="Blues")
             fig.update_layout(coloraxis_showscale=False, height=280)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
