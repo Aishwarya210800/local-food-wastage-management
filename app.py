@@ -82,12 +82,16 @@ def qdf(sql, params=None):
     try:
         cur = conn.cursor()
         cur.execute(sql, params or [])
-        cols = [d[0] for d in cur.description]
         rows = cur.fetchall()
         cur.close()
-        return pd.DataFrame(rows, columns=cols)
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame(rows)
     except Exception as e:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except:
+            pass
         st.error(f"Query error: {e}")
         return pd.DataFrame()
 
@@ -122,14 +126,6 @@ with st.sidebar:
         "📊  EDA & Charts",
         "📋  Provider / Receiver Info"
     ], label_visibility="collapsed")
-    st.markdown("---")
-    st.markdown("""
-    <div style='font-size:0.75rem;opacity:0.7;'>
-    🗄️ MySQL · Streamlit<br>
-    4 tables · 4,000 records<br>
-    17 SQL queries
-    </div>
-    """, unsafe_allow_html=True)
     st.markdown("---")
     st.markdown("""
     <div style='font-size:0.75rem;opacity:0.7;'>
