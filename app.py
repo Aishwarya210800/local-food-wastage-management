@@ -1,5 +1,5 @@
 import streamlit as st
-import mysql.connector
+import pymysql
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -68,12 +68,13 @@ footer    { visibility: hidden; }
 # ─────────────────────────────────────────────
 @st.cache_resource
 def get_conn():
-    return mysql.connector.connect(
+    return pymysql.connect(
         host="tramway.proxy.rlwy.net",
         port=32241,
         user="root",
         password="HxOgIDRTrnnBsavCGsxOVawLZNgwrGGH",
-        database="railway"
+        database="railway",
+        cursorclass=pymysql.cursors.DictCursor
     )
 
 def qdf(sql, params=None):
@@ -113,7 +114,7 @@ def scalar(sql, params=None):
 with st.sidebar:
     st.markdown("## 🥗 Food Wastage MS")
     st.markdown("---")
-    page = st.radio("", [
+    page = st.radio("Navigation", [
         "🏠  Dashboard",
         "🔍  SQL Query Explorer",
         "🔎  Filter & Search",
@@ -121,6 +122,14 @@ with st.sidebar:
         "📊  EDA & Charts",
         "📋  Provider / Receiver Info"
     ], label_visibility="collapsed")
+    st.markdown("---")
+    st.markdown("""
+    <div style='font-size:0.75rem;opacity:0.7;'>
+    🗄️ MySQL · Streamlit<br>
+    4 tables · 4,000 records<br>
+    17 SQL queries
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
     st.markdown("""
     <div style='font-size:0.75rem;opacity:0.7;'>
