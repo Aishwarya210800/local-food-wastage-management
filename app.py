@@ -69,10 +69,11 @@ footer    { visibility: hidden; }
 @st.cache_resource
 def get_conn():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="qwertyuiop",
-        database="food_wastage_db"
+        host=st.secrets["mysql"]["host"],
+        port=st.secrets["mysql"]["port"],
+        user=st.secrets["mysql"]["user"],
+        password=st.secrets["mysql"]["password"],
+        database=st.secrets["mysql"]["database"]
     )
 
 def qdf(sql, params=None):
