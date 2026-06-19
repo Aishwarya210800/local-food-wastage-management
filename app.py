@@ -69,11 +69,11 @@ footer    { visibility: hidden; }
 @st.cache_resource
 def get_conn():
     return mysql.connector.connect(
-        host=st.secrets["mysql"]["host"],
-        port=st.secrets["mysql"]["port"],
-        user=st.secrets["mysql"]["user"],
-        password=st.secrets["mysql"]["password"],
-        database=st.secrets["mysql"]["database"]
+        host="tramway.proxy.rlwy.net",
+        port=32241,
+        user="root",
+        password="HxOgIDRTrnnBsavCGsxOVawLZNgwrGGH",
+        database="railway"
     )
 
 def qdf(sql, params=None):
